@@ -309,4 +309,387 @@
                 <!-- Progress Chart -->
                 <div class="lg:col-span-2 bg-brand-card p-6 rounded-2xl border border-gray-800 space-y-4">
                     <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="text-lg font-bold text-white">Weight History & Progress</h3>
+                            <p class="text-xs text-gray-400">Tracking progress toward target goal</p>
+                        </div>
+                        <span class="text-xs bg-brand-neon/10 text-brand-neon px-2.5 py-1 rounded-lg border border-brand-neon/20 font-semibold">Active Trend</span>
+                    </div>
+                    <div class="h-64 w-full">
+                        <canvas id="weightChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Log Weight & Water Tracker Panel -->
+                <div class="space-y-6">
+                    <!-- Log New Weight -->
+                    <div class="bg-brand-card p-5 rounded-2xl border border-gray-800 space-y-3">
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-weight-scale text-brand-neon"></i> Log Body Weight
+                        </h3>
+                        <div class="flex gap-2">
+                            <input type="number" id="log-weight-input" step="0.1" placeholder="e.g. 75.4" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-neon">
+                            <button onclick="addWeightEntry()" class="bg-brand-neon hover:bg-brand-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-sm transition">Log</button>
+                        </div>
+                    </div>
+
+                    <!-- Water Tracker -->
+                    <div class="bg-brand-card p-5 rounded-2xl border border-gray-800 space-y-3">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-droplet text-cyan-400"></i> Water Intake
+                            </h3>
+                            <span class="text-xs text-gray-400"><span id="water-count">0</span> / 8 Glasses</span>
+                        </div>
+                        <div class="grid grid-cols-4 gap-2" id="water-glasses-grid">
+                            <!-- Glasses generated via JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Daily Workout Tracker -->
+            <div class="bg-brand-card p-6 rounded-2xl border border-gray-800 space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-lg font-bold text-white">Workout & Training Log</h3>
+                        <p class="text-xs text-gray-400">Record daily training sessions and exercises</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="text" id="workout-input" placeholder="Exercise (e.g., Bench Press 4x10)" class="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-neon w-full sm:w-64">
+                        <button onclick="addWorkout()" class="bg-brand-neon hover:bg-brand-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-sm transition whitespace-nowrap">+ Add</button>
+                    </div>
+                </div>
+
+                <div id="workout-list" class="space-y-2">
+                    <!-- Dynamic Workout List -->
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-gray-800/60 py-6 text-center text-xs text-gray-400">
+        <p>© 2026 Fitspot.AI Tracker Clone. Powered by Local Web Storage.</p>
+    </footer>
+
+    <!-- Application Script Logic -->
+    <script>
+        // State Management
+        let appState = {
+            goal: 'fat_loss',
+            age: 25,
+            height: 175,
+            currentWeight: 78,
+            targetWeight: 72,
+            activityLevel: 1.375,
+            waterIntake: 0,
+            weightLogs: [78.0, 77.6, 77.2, 76.8, 76.5, 76.1],
+            weightDates: ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6'],
+            workouts: [
+                { id: 1, name: 'Pushups - 3 sets x 15 reps', completed: true },
+                { id: 2, name: 'Dumbbell Shoulder Press - 4 sets x 10 reps', completed: false }
+            ]
+        };
+
+        let weightChartInstance = null;
+
+        // Initialization
+        window.addEventListener('DOMContentLoaded', () => {
+            loadFromStorage();
+            if (localStorage.getItem('fitspot_completed_onboarding') === 'true') {
+                showDashboard();
+            } else {
+                goToStep(1);
+            }
+        });
+
+        // Navigation Control
+        function goToStep(stepNumber) {
+            document.querySelectorAll('.step-container').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`step-${stepNumber}`).classList.remove('hidden');
+
+            const percent = stepNumber === 1 ? '33%' : stepNumber === 2 ? '66%' : '100%';
+            document.getElementById('step-indicator-text').innerText = `Step ${stepNumber} of 3`;
+            document.getElementById('step-percentage').innerText = `${percent} Completed`;
+            document.getElementById('progress-bar-fill').style.width = percent;
+        }
+
+        function selectGoal(goalType) {
+            appState.goal = goalType;
+            goToStep(2);
+        }
+
+        function generatePlan() {
+            // Retrieve metrics from inputs
+            appState.age = parseFloat(document.getElementById('input-age').value) || 25;
+            appState.height = parseFloat(document.getElementById('input-height').value) || 175;
+            appState.currentWeight = parseFloat(document.getElementById('input-current-weight').value) || 78;
+            appState.targetWeight = parseFloat(document.getElementById('input-target-weight').value) || 72;
+            
+            const activityRadios = document.getElementsByName('activity');
+            for (const radio of activityRadios) {
+                if (radio.checked) {
+                    appState.activityLevel = parseFloat(radio.value);
+                    break;
+                }
+            }
+
+            // Show Loading State
+            document.querySelectorAll('.step-container').forEach(el => el.classList.add('hidden'));
+            document.getElementById('step-loading').classList.remove('hidden');
+
+            const statusTexts = [
+                "Calculating Basal Metabolic Rate (BMR)...",
+                "Optimizing Macronutrient Ratios...",
+                "Finalizing Customized Dashboard..."
+            ];
+
+            let textIndex = 0;
+            const interval = setInterval(() => {
+                if (textIndex < statusTexts.length) {
+                    document.getElementById('loading-status-text').innerText = statusTexts[textIndex];
+                    textIndex++;
+                }
+            }, 600);
+
+            setTimeout(() => {
+                clearInterval(interval);
+                saveToStorage();
+                localStorage.setItem('fitspot_completed_onboarding', 'true');
+                showDashboard();
+            }, 2200);
+        }
+
+        function showDashboard() {
+            document.getElementById('onboarding-container').classList.add('hidden');
+            document.getElementById('dashboard-container').classList.remove('hidden');
+            document.getElementById('nav-retake-btn').classList.remove('hidden');
+
+            calculateMetrics();
+            renderWaterTracker();
+            renderWorkouts();
+            initOrUpdateChart();
+        }
+
+        function resetToOnboarding() {
+            document.getElementById('dashboard-container').classList.add('hidden');
+            document.getElementById('onboarding-container').classList.remove('hidden');
+            document.getElementById('nav-retake-btn').classList.add('hidden');
+            goToStep(1);
+        }
+
+        function resetApp() {
+            if (confirm('Are you sure you want to reset all tracked data?')) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+
+        // BMR & Macro Calculations (Mifflin-St Jeor Formula)
+        function calculateMetrics() {
+            const bmr = (10 * appState.currentWeight) + (6.25 * appState.height) - (5 * appState.age) + 5;
+            let tdee = bmr * appState.activityLevel;
+
+            if (appState.goal === 'fat_loss') {
+                tdee -= 400; // Caloric Deficit
+                document.getElementById('stat-goal-desc').innerText = 'Target for Fat Loss (-400 kcal)';
+            } else if (appState.goal === 'muscle_gain') {
+                tdee += 350; // Caloric Surplus
+                document.getElementById('stat-goal-desc').innerText = 'Target for Muscle Gain (+350 kcal)';
+            } else {
+                document.getElementById('stat-goal-desc').innerText = 'Target for Weight Maintenance';
+            }
+
+            const targetCalories = Math.round(tdee);
+            const proteinGrams = Math.round((targetCalories * 0.30) / 4);
+            const carbsGrams = Math.round((targetCalories * 0.40) / 4);
+            const fatsGrams = Math.round((targetCalories * 0.30) / 9);
+
+            document.getElementById('stat-calories').innerText = targetCalories.toLocaleString();
+            document.getElementById('stat-protein').innerText = proteinGrams;
+            document.getElementById('stat-carbs').innerText = carbsGrams;
+            document.getElementById('stat-fats').innerText = fatsGrams;
+
+            document.getElementById('dash-target-weight').innerText = appState.targetWeight;
+            document.getElementById('dash-start-weight').innerText = appState.currentWeight;
+        }
+
+        // Water Tracker Component
+        function renderWaterTracker() {
+            const grid = document.getElementById('water-glasses-grid');
+            grid.innerHTML = '';
+            document.getElementById('water-count').innerText = appState.waterIntake;
+
+            for (let i = 0; i < 8; i++) {
+                const glass = document.createElement('button');
+                glass.className = `p-3 rounded-xl border flex items-center justify-center transition ${
+                    i < appState.waterIntake 
+                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-400' 
+                        : 'bg-gray-900 border-gray-800 text-gray-600 hover:border-gray-700'
+                }`;
+                glass.innerHTML = '<i class="fa-solid fa-glass-water text-lg"></i>';
+                glass.onclick = () => toggleWaterGlass(i);
+                grid.appendChild(glass);
+            }
+        }
+
+        function toggleWaterGlass(index) {
+            if (appState.waterIntake === index + 1) {
+                appState.waterIntake = index;
+            } else {
+                appState.waterIntake = index + 1;
+            }
+            saveToStorage();
+            renderWaterTracker();
+        }
+
+        // Workout Log Component
+        function renderWorkouts() {
+            const list = document.getElementById('workout-list');
+            list.innerHTML = '';
+
+            if (appState.workouts.length === 0) {
+                list.innerHTML = '<p class="text-xs text-gray-500 italic py-2">No exercises logged for today yet.</p>';
+                return;
+            }
+
+            appState.workouts.forEach(item => {
+                const el = document.createElement('div');
+                el.className = `p-3 rounded-xl border flex items-center justify-between transition ${
+                    item.completed ? 'bg-gray-900/50 border-gray-800 text-gray-500 line-through' : 'bg-gray-900 border-gray-700 text-white'
+                }`;
+                el.innerHTML = `
+                    <div class="flex items-center space-x-3 cursor-pointer" onclick="toggleWorkout(${item.id})">
+                        <i class="fa-regular ${item.completed ? 'fa-circle-check text-brand-neon' : 'fa-circle text-gray-600'} text-base"></i>
+                        <span class="text-sm font-medium">${item.name}</span>
+                    </div>
+                    <button onclick="deleteWorkout(${item.id})" class="text-gray-500 hover:text-red-400 px-2 py-1 text-xs">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                `;
+                list.appendChild(el);
+            });
+        }
+
+        function addWorkout() {
+            const input = document.getElementById('workout-input');
+            const val = input.value.trim();
+            if (!val) return;
+
+            appState.workouts.push({
+                id: Date.now(),
+                name: val,
+                completed: false
+            });
+            input.value = '';
+            saveToStorage();
+            renderWorkouts();
+        }
+
+        function toggleWorkout(id) {
+            appState.workouts = appState.workouts.map(w => w.id === id ? { ...w, completed: !w.completed } : w);
+            saveToStorage();
+            renderWorkouts();
+        }
+
+        function deleteWorkout(id) {
+            appState.workouts = appState.workouts.filter(w => w.id !== id);
+            saveToStorage();
+            renderWorkouts();
+        }
+
+        // Weight Logging & Chart.js Integration
+        function addWeightEntry() {
+            const input = document.getElementById('log-weight-input');
+            const val = parseFloat(input.value);
+            if (!val || val <= 0) return;
+
+            appState.weightLogs.push(val);
+            appState.weightDates.push(`Day ${appState.weightLogs.length}`);
+            appState.currentWeight = val;
+            input.value = '';
+
+            saveToStorage();
+            calculateMetrics();
+            initOrUpdateChart();
+        }
+
+        function initOrUpdateChart() {
+            const ctx = document.getElementById('weightChart').getContext('2d');
+            
+            if (weightChartInstance) {
+                weightChartInstance.data.labels = appState.weightDates;
+                weightChartInstance.data.datasets[0].data = appState.weightLogs;
+                weightChartInstance.update();
+                return;
+            }
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+            gradient.addColorStop(0, 'rgba(16, 185, 129, 0.35)');
+            gradient.addColorStop(1, 'rgba(16, 185, 129, 0.0)');
+
+            weightChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: appState.weightDates,
+                    datasets: [{
+                        label: 'Body Weight (kg)',
+                        data: appState.weightLogs,
+                        borderColor: '#10b981',
+                        borderWidth: 3,
+                        pointBackgroundColor: '#10b981',
+                        pointBorderColor: '#0b0f19',
+                        pointBorderWidth: 2,
+                        pointRadius: 5,
+                        fill: true,
+                        backgroundColor: gradient,
+                        tension: 0.35
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: '#1f2937' },
+                            ticks: { color: '#9ca3af', font: { size: 11 } }
+                        },
+                        y: {
+                            grid: { color: '#1f2937' },
+                            ticks: { color: '#9ca3af', font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Persistence Helpers
+        function saveToStorage() {
+            localStorage.setItem('fitspot_app_state', JSON.stringify(appState));
+        }
+
+        function loadFromStorage() {
+            const saved = localStorage.getItem('fitspot_app_state');
+            if (saved) {
+                try {
+                    appState = { ...appState, ...JSON.parse(saved) };
+                    document.getElementById('input-age').value = appState.age;
+                    document.getElementById('input-height').value = appState.height;
+                    document.getElementById('input-current-weight').value = appState.currentWeight;
+                    document.getElementById('input-target-weight').value = appState.targetWeight;
+                } catch (e) {
+                    console.error("Could not parse saved state:", e);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
+
        
